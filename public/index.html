@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>简单聊天机器人</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-container {
+            flex: 1;
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+
+        .chat-header {
+            background: #007bff;
+            color: white;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            min-height: 400px;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            display: flex;
+        }
+
+        .message.user {
+            justify-content: flex-end;
+        }
+
+        .message.bot {
+            justify-content: flex-start;
+        }
+
+        .message-content {
+            max-width: 70%;
+            padding: 10px 15px;
+            border-radius: 18px;
+            word-wrap: break-word;
+        }
+
+        .message.user .message-content {
+            background: #007bff;
+            color: white;
+        }
+
+        .message.bot .message-content {
+            background: #e9ecef;
+            color: #333;
+        }
+
+        .chat-input {
+            padding: 20px;
+            border-top: 1px solid #ddd;
+            display: flex;
+            gap: 10px;
+        }
+
+        .input-field {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 25px;
+            outline: none;
+            font-size: 14px;
+        }
+
+        .send-button {
+            padding: 12px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .send-button:hover {
+            background: #0056b3;
+        }
+
+        .send-button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .loading {
+            display: none;
+            color: #666;
+            font-style: italic;
+        }
+
+        @media (max-width: 600px) {
+            .chat-container {
+                height: 100vh;
+                margin: 0;
+            }
+            
+            .message-content {
+                max-width: 85%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h1>聊天机器人</h1>
+        </div>
+        
+        <div class="chat-messages" id="chatMessages">
+            <div class="message bot">
+                <div class="message-content">
+                    你好！我是聊天助手，有什么可以帮助你的吗？
+                </div>
+            </div>
+        </div>
+        
+        <div class="chat-input">
+            <input type="text" class="input-field" id="messageInput" placeholder="输入你的问题..." />
+            <button class="send-button" id="sendButton">发送</button>
+        </div>
+        
+        <div class="loading" id="loading">正在思考中...</div>
+    </div>
+
+    <script>
+        const chatMessages = document.getElementById('chatMessages');
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+        const loading = document.getElementById('loading');
+
+        // 配置变量 - 必须从服务器获取
+        let config = null;
+
+        // 加载配置
+        async function loadConfig() {
+            try {
+                const response = await fetch('/api/config');
+                if (response.ok) {
+                    config = await response.json();
+                    console.log('配置加载成功:', config);
+                    return true;
+                }
+            } catch (error) {
+                console.error('配置加载失败:', error);
+            }
+            return false;
+        }
+
+        // 发送消息
+        async function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message) return;
+
+            // 检查配置是否加载
+            if (!config) {
+                displayMessage('配置加载失败，请刷新页面重试。', 'bot');
+                return;
+            }
+
+            // 显示用户消息
+            displayMessage(message, 'user');
+            messageInput.value = '';
+            
+            // 禁用发送按钮
+            sendButton.disabled = true;
+            loading.style.display = 'block';
+
+            try {
+                // 构建API URL
+                const apiUrl = `${config.apiBaseUrl}${config.apiEndpoint}`;
+                
+                // 调用API
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${config.apiToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        inputs: {},
+                        query: message,
+                        response_mode: config.responseMode,
+                        conversation_id: '',
+                        user: config.defaultUser
+                    })
+                });
+
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        throw new Error('认证失败：API密钥无效或已过期');
+                    } else if (response.status === 403) {
+                        throw new Error('访问被拒绝：没有权限访问此API');
+                    } else if (response.status >= 500) {
+                        throw new Error('服务器内部错误，请稍后重试');
+                    } else {
+                        throw new Error(`API调用失败 (状态码: ${response.status})`);
+                    }
+                }
+
+                // 创建机器人消息容器
+                const botMessageDiv = document.createElement('div');
+                botMessageDiv.className = 'message bot';
+                const botContentDiv = document.createElement('div');
+                botContentDiv.className = 'message-content';
+                botMessageDiv.appendChild(botContentDiv);
+                chatMessages.appendChild(botMessageDiv);
+
+                // 处理流式响应
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.slice(6));
+                                if (data.event === 'message' && data.answer) {
+                                    botContentDiv.textContent += data.answer;
+                                    scrollToBottom();
+                                }
+                            } catch (e) {
+                                // 忽略解析错误
+                            }
+                        }
+                    }
+                }
+
+            } catch (error) {
+                console.error('Error:', error);
+                let errorMessage = '抱歉，服务暂时不可用，请稍后再试。';
+                
+                if (error.message.includes('认证失败')) {
+                    errorMessage = '抱歉，API认证失败，请检查配置或联系管理员。';
+                } else if (error.message.includes('访问被拒绝')) {
+                    errorMessage = '抱歉，访问被拒绝，请联系管理员获取权限。';
+                } else if (error.message.includes('服务器内部错误')) {
+                    errorMessage = '抱歉，服务器出现问题，请稍后重试。';
+                } else if (error.message.includes('网络')) {
+                    errorMessage = '抱歉，网络连接出现问题，请检查网络连接。';
+                }
+                
+                displayMessage(errorMessage, 'bot');
+            } finally {
+                // 恢复发送按钮
+                sendButton.disabled = false;
+                loading.style.display = 'none';
+                scrollToBottom();
+            }
+        }
+
+        // 显示消息
+        function displayMessage(content, type) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.textContent = content;
+            
+            messageDiv.appendChild(contentDiv);
+            chatMessages.appendChild(messageDiv);
+            
+            scrollToBottom();
+        }
+
+        // 滚动到底部
+        function scrollToBottom() {
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // 事件监听
+        sendButton.addEventListener('click', sendMessage);
+        
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        // 页面加载完成后的初始化
+        window.addEventListener('load', async () => {
+            const configLoaded = await loadConfig();
+            if (!configLoaded) {
+                displayMessage('配置加载失败，请检查服务器连接或联系管理员。', 'bot');
+                sendButton.disabled = true;
+                messageInput.disabled = true;
+                messageInput.placeholder = '配置加载失败，无法发送消息';
+            } else {
+                messageInput.focus();
+            }
+        });
+    </script>
+</body>
+</html>
