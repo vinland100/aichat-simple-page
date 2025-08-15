@@ -17,19 +17,6 @@
 
 ## 快速开始
 
-### 一键设置（推荐）
-```bash
-# 安装依赖并检查配置
-npm run setup
-
-# 如果配置检查失败，请编辑.env文件后重新检查
-nano .env
-npm run check-config
-
-# 启动服务器
-npm start
-```
-
 ### 手动设置
 如果需要手动配置，请按照以下步骤：
 
@@ -45,8 +32,6 @@ cd aichat-simple-page
 ```bash
 npm install
 ```
-
-### 3. 配置环境变量
 
 ### 3. 配置环境变量
 
@@ -75,11 +60,6 @@ DEFAULT_USER=web-user                       # 默认用户标识
 - 不要将 `.env` 文件提交到版本控制系统
 - `.env` 文件包含敏感信息，请妥善保管
 
-### 4. 验证配置
-运行配置检查脚本，确保所有必需的环境变量都已正确设置：
-```bash
-npm run check-config
-```
 
 ### 5. 启动服务器
 ```bash
