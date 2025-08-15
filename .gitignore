@@ -1,6 +1,9 @@
 # 环境变量文件
 .env
 
+# Kiro 项目文件
+.kiro/
+
 # 依赖目录
 node_modules/
 
